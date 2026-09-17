@@ -1,5 +1,5 @@
 -- XKil Full
--- Rayfield Object Manager
+-- Physical Object Manager
 
 local Rayfield = loadstring(game:HttpGet(
     "https://sirius.menu/rayfield"
@@ -12,14 +12,27 @@ local ObjectManager = loadstring(game:HttpGet(
     "https://raw.githubusercontent.com/fernandoguilheme82-spec/xkil-full/refs/heads/main/Games/ObjectManager.lua"
 ))()
 
-local ObjectNames = ObjectManager.Scan(workspace)
+local function GetRoot()
+    local character = LocalPlayer.Character
+
+    return character
+        and character:FindFirstChild("HumanoidRootPart")
+end
+
+local Root = GetRoot()
+
+local ObjectNames = ObjectManager.Scan(
+    workspace,
+    Root and Root.Position or Vector3.zero
+)
+
 local SelectedName = nil
 
 local Window = Rayfield:CreateWindow({
     Name = "XKil Full",
     Icon = 0,
     LoadingTitle = "XKil Full",
-    LoadingSubtitle = "Object Manager",
+    LoadingSubtitle = "Physical Objects",
     Theme = "Default",
     ConfigurationSaving = {
         Enabled = true,
@@ -30,23 +43,20 @@ local Window = Rayfield:CreateWindow({
 
 local ObjectsTab = Window:CreateTab("Objects", "box")
 
-ObjectsTab:CreateSection("Object Manager")
+ObjectsTab:CreateSection("Physical Objects")
 
 local ObjectDropdown = ObjectsTab:CreateDropdown({
     Name = "Objeto",
     Options = ObjectNames,
     CurrentOption = {},
     MultipleOptions = false,
-    Flag = "SelectedObject",
 
-    Callback = function(Options)
-        if type(Options) == "table" then
-            SelectedName = Options[1]
+    Callback = function(options)
+        if type(options) == "table" then
+            SelectedName = options[1]
         else
-            SelectedName = Options
+            SelectedName = options
         end
-
-        print("[XKil Full] Selecionado:", SelectedName)
     end
 })
 
@@ -57,51 +67,61 @@ ObjectsTab:CreateButton({
         if not SelectedName then
             Rayfield:Notify({
                 Title = "XKil Full",
-                Content = "Selecione um objeto primeiro.",
+                Content = "Selecione um objeto.",
                 Duration = 3
             })
             return
         end
 
-        local Character = LocalPlayer.Character
-        local Root = Character
-            and Character:FindFirstChild("HumanoidRootPart")
+        local root = GetRoot()
 
-        if not Root then
+        if not root then
             return
         end
 
-        local Objects = ObjectManager.Get(SelectedName)
+        local list = ObjectManager.Get(SelectedName)
 
-        if not Objects then
+        if not list then
             return
         end
 
-        local Total = #Objects
+        local total = #list
 
-        for Index, Data in ipairs(Objects) do
-            local Object = Data.Object
+        -- Mantém uma distância mínima entre os objetos.
+        local spacing = 4
+        local columns = math.max(
+            1,
+            math.ceil(math.sqrt(total))
+        )
 
-            if Object and Object.Parent then
-                local Angle =
-                    (Index / math.max(Total, 1))
-                    * math.pi * 2
+        -- Processamento em lotes para evitar um pico enorme.
+        local batchSize = 25
 
-                local Radius = 5
+        for index, data in ipairs(list) do
+            local object = data.Object
 
-                local Offset = Vector3.new(
-                    math.cos(Angle) * Radius,
-                    2 + ((Index - 1) % 3) * 1.5,
-                    math.sin(Angle) * Radius
-                )
+            if object and object.Parent then
+                local row = math.floor((index - 1) / columns)
+                local column = (index - 1) % columns
 
-                Object.CFrame = Root.CFrame + Offset
+                local x = (column - (columns - 1) / 2) * spacing
+                local z = row * spacing + 6
+
+                local target =
+                    root.CFrame
+                    * CFrame.new(x, 3, -z)
+
+                object.CFrame = target
+            end
+
+            if index % batchSize == 0 then
+                task.wait()
             end
         end
 
         Rayfield:Notify({
             Title = "XKil Full",
-            Content = "Objetos puxados: " .. SelectedName,
+            Content = total .. " objetos posicionados.",
             Duration = 3
         })
     end
@@ -112,11 +132,6 @@ ObjectsTab:CreateButton({
 
     Callback = function()
         if not SelectedName then
-            Rayfield:Notify({
-                Title = "XKil Full",
-                Content = "Selecione um objeto primeiro.",
-                Duration = 3
-            })
             return
         end
 
@@ -138,7 +153,7 @@ ObjectsTab:CreateButton({
 
         Rayfield:Notify({
             Title = "XKil Full",
-            Content = "Todos os objetos foram restaurados.",
+            Content = "Todos os objetos restaurados.",
             Duration = 3
         })
     end
@@ -148,7 +163,12 @@ ObjectsTab:CreateButton({
     Name = "Atualizar lista",
 
     Callback = function()
-        ObjectNames = ObjectManager.Scan(workspace)
+        local root = GetRoot()
+
+        ObjectNames = ObjectManager.Scan(
+            workspace,
+            root and root.Position or Vector3.zero
+        )
 
         ObjectDropdown:Refresh(ObjectNames)
 
@@ -156,8 +176,8 @@ ObjectsTab:CreateButton({
 
         Rayfield:Notify({
             Title = "XKil Full",
-            Content = tostring(#ObjectNames) .. " tipos de objetos encontrados.",
-            Duration = 3
+            Content = #ObjectNames .. " tipos físicos encontrados em até 5000 studs.",
+            Duration = 4
         })
     end
 })
@@ -166,9 +186,6 @@ Rayfield:LoadConfiguration()
 
 Rayfield:Notify({
     Title = "XKil Full",
-    Content = tostring(#ObjectNames) .. " tipos de objetos encontrados.",
+    Content = #ObjectNames .. " tipos físicos encontrados.",
     Duration = 4
 })
-
-print("[XKil Full] Rayfield carregado.")
-print("[XKil Full] Objetos:", #ObjectNames)
